@@ -43,6 +43,7 @@ public class PushNotifications extends Plugin
 	public static final String SEND_LOCATION = "sendLocation";
 	public static final String CREATE_LOCAL_NOTIFICATION = "createLocalNotification";
 	public static final String CLEAR_LOCAL_NOTIFICATION = "clearLocalNotification";
+	public static final String ON_DEVICE_READY = "onDeviceReady";
 	
 	boolean loggedStart = false;
 
@@ -294,6 +295,12 @@ public class PushNotifications extends Plugin
 	public PluginResult execute(String action, JSONArray data, String callbackId)
 	{
 		Log.d("PushNotifications", "Plugin Called");
+		
+		if(ON_DEVICE_READY.equals(action))
+		{
+			checkMessage(cordova.getActivity().getIntent());
+			return new PluginResult(Status.OK);
+		}
 
 		if (REGISTER.equals(action))
 		{

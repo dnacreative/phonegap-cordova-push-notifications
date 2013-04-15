@@ -27,6 +27,10 @@
 	PushNotification.prototype.sendLocation = function(config, success, fail) {
 		cordova.exec(success, fail, "PushNotification", "sendLocation", config ? [config] : []);
 	};
+	
+	PushNotification.prototype.onDeviceReady = function() {
+		cordova.exec(null, null, "PushNotification", "onDeviceReady", []);
+	};
 
 	//Android Only----
 	PushNotification.prototype.unregisterDevice = function(success, fail) {
@@ -88,10 +92,6 @@
 	//Android End----
 	
 	//iOS only----
-	PushNotification.prototype.onDeviceReady = function() {
-		cordova.exec(null, null, "PushNotification", "onDeviceReady", []);
-	};
-
 	// Call this to get a detailed status of remoteNotifications
 	PushNotification.prototype.getRemoteNotificationStatus = function(callback) {
 		cordova.exec(callback, callback, "PushNotification", "getRemoteNotificationStatus", []);
