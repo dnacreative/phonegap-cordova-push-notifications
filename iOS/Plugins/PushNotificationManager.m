@@ -15,8 +15,8 @@
 #import "PWPushStatRequest.h"
 #import "PWGetNearestZoneRequest.h"
 #import "PWApplicationEventRequest.h"
-#import "PW_SBJsonParser.h"
-#import "PW_SBJsonWriter.h"
+
+#import "PWLocationTracker.h"
 
 #include <sys/socket.h> // Per msqr
 #include <sys/sysctl.h>
@@ -157,12 +157,28 @@ static PushNotificationManager * instance = nil;
 		
 		internalIndex = 0;
 		pushNotifications = [[NSMutableDictionary alloc] init];
-		showPushnotificationAlert = FALSE;
+		showPushnotificationAlert = TRUE;
 		
 		[[NSUserDefaults standardUserDefaults] setObject:_appCode forKey:@"Pushwoosh_APPID"];
 		if(_appName) {
 			[[NSUserDefaults standardUserDefaults] setObject:_appName forKey:@"Pushwoosh_APPNAME"];
 		}
+		
+		//initalize location tracker
+		self.locationTracker = [[PWLocationTracker alloc] init];
+		[self.locationTracker setLocationUpdatedInForeground:^ (CLLocation *location) {
+			if (!location)
+				return;
+
+			[[PushNotificationManager pushManager] sendLocationBackground:location];
+		}];
+		
+		[self.locationTracker setLocationUpdatedInBackground:^ (CLLocation *location) {
+			if (!location)
+				return;
+
+			[[PushNotificationManager pushManager] sendLocationBackground:location];
+		}];
 		
 		instance = self;
 	}
@@ -474,6 +490,11 @@ static PushNotificationManager * instance = nil;
 	}
 
 	NSString *alertMsg = [pushDict objectForKey:@"alert"];
+	
+	bool msgIsString = YES;
+	if(![alertMsg isKindOfClass:[NSString class]])
+		msgIsString = NO;
+	
 //	NSString *badge = [pushDict objectForKey:@"badge"];
 //	NSString *sound = [pushDict objectForKey:@"sound"];
 	NSString *htmlPageId = [userInfo objectForKey:@"h"];
@@ -481,7 +502,7 @@ static PushNotificationManager * instance = nil;
 	NSString *linkUrl = [userInfo objectForKey:@"l"];
 	
 	//the app is running, display alert only
-	if(!isPushOnStart && showPushnotificationAlert) {
+	if(!isPushOnStart && showPushnotificationAlert && msgIsString) {
 		UIAlertView *alert = [[UIAlertView alloc] initWithTitle:self.appName message:alertMsg delegate:self cancelButtonTitle:@"Cancel" otherButtonTitles:@"OK", nil];
 		alert.tag = ++internalIndex;
 		[pushNotifications setObject:userInfo forKey:[NSNumber numberWithInt:internalIndex]];
@@ -556,7 +577,7 @@ static PushNotificationManager * instance = nil;
 	[pool release]; pool = nil;
 }
 
-- (void) sendLocation: (CLLocation *) location {
+- (void) sendLocationBackground: (CLLocation *) location {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	
 	NSLog(@"Sending location: %@", location);
@@ -577,6 +598,10 @@ static PushNotificationManager * instance = nil;
 	NSLog(@"Locaiton sent");
 	
 	[pool release]; pool = nil;
+}
+
+- (void) sendLocation: (CLLocation *) location {
+	[self performSelectorInBackground:@selector(sendLocationBackground:) withObject:location];
 }
 
 - (void) sendAppOpenBackground {
@@ -665,6 +690,22 @@ static PushNotificationManager * instance = nil;
 	application.scheduledLocalNotifications = scheduledNotifications;
 }
 
+//start location tracking. this is battery efficient and uses network triangulation in background
+- (void)startLocationTracking {
+	NSString *modeString = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"Pushwoosh_BGMODE"];
+	[self startLocationTracking:modeString];
+}
+
+- (void) startLocationTracking:(NSString *)mode {
+	self.locationTracker.backgroundMode = mode;
+	self.locationTracker.enabled = YES;
+}
+
+//stops location tracking
+- (void) stopLocationTracking {
+	self.locationTracker.enabled = NO;
+}
+
 - (void) dealloc {
 	self.richPushWindow = nil;
 	self.delegate = nil;
@@ -672,161 +713,6 @@ static PushNotificationManager * instance = nil;
 	self.pushNotifications = nil;
 	
 	[super dealloc];
-}
-
-@end
-
-#import <objc/runtime.h>
-#import "AppDelegate.h"
-#import "PushNotification.h"
-
-@interface AppDelegate (Pushwoosh)
-- (void)application:(UIApplication *)application newDidRegisterForRemoteNotificationsWithDeviceToken:(NSData *)devToken;
-- (void)application:(UIApplication *)application newDidFailToRegisterForRemoteNotificationsWithError:(NSError *)err;
-- (void)application:(UIApplication *)application newDidReceiveRemoteNotification:(NSDictionary *)userInfo;
-
-- (BOOL)application:(UIApplication *)application newDidFinishLaunchingWithOptions:(NSDictionary *)launchOptions;
-@end
-
-@implementation AppDelegate(Pushwoosh)
-
-- (void)application:(UIApplication *)application internalDidRegisterForRemoteNotificationsWithDeviceToken:(NSData *)devToken {
-	PushNotification *pushHandler = [self.viewController getCommandInstance:@"PushNotification"];
-	[pushHandler.pushManager handlePushRegistration:devToken];
-	
-    //you might want to send it to your backend if you use remote integration
-	NSString *token = [pushHandler.pushManager getPushToken];
-	NSLog(@"Push token: %@", token);
-}
-
-- (void)application:(UIApplication *)application newDidRegisterForRemoteNotificationsWithDeviceToken:(NSData *)devToken {
-	[self application:application newDidRegisterForRemoteNotificationsWithDeviceToken:devToken];
-	[self application:application internalDidRegisterForRemoteNotificationsWithDeviceToken:devToken];
-}
-
-- (void)application:(UIApplication *)application internalDidFailToRegisterForRemoteNotificationsWithError:(NSError *)err {
-	PushNotification* pushHandler = [self.viewController getCommandInstance:@"PushNotification"];
-	[pushHandler onDidFailToRegisterForRemoteNotificationsWithError:err];
-}
-
-- (void)application:(UIApplication *)application newDidFailToRegisterForRemoteNotificationsWithError:(NSError *)err {
-	[self application:application newDidFailToRegisterForRemoteNotificationsWithError:err];
-	[self application:application internalDidFailToRegisterForRemoteNotificationsWithError:err];
-}
-
-- (void)application:(UIApplication *)application internalDidReceiveRemoteNotification:(NSDictionary *)userInfo {
-	PushNotification *pushHandler = [self.viewController getCommandInstance:@"PushNotification"];
-	[pushHandler.pushManager handlePushReceived:userInfo];
-}
-
-- (void)application:(UIApplication *)application newDidReceiveRemoteNotification:(NSDictionary *)userInfo {
-	[self application:application newDidReceiveRemoteNotification:userInfo];
-	[self application:application internalDidReceiveRemoteNotification:userInfo];
-}
-
-
-- (BOOL)application:(UIApplication *)application newDidFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-	BOOL result = [self application:application newDidFinishLaunchingWithOptions:launchOptions];
-	
-	PushNotification *pushHandler = [self.viewController getCommandInstance:@"PushNotification"];
-	if(!pushHandler || !pushHandler.pushManager)
-		return result;
-		
-	[pushHandler.pushManager sendAppOpen];
-	
-	if(result) {
-		NSDictionary * userInfo = [launchOptions objectForKey:UIApplicationLaunchOptionsRemoteNotificationKey];
-		[pushHandler.pushManager handlePushReceived:userInfo];
-		
-		
-		NSString* u = [userInfo objectForKey:@"u"];
-		if (u) {
-			PW_SBJsonParser * json = [[PW_SBJsonParser alloc] init];
-			NSDictionary *dict =[json objectWithString:u];
-			[json release]; json = nil;
-
-			if (dict) {
-				NSMutableDictionary *pn = [NSMutableDictionary dictionaryWithDictionary:userInfo];
-				[pn setObject:dict forKey:@"u"];
-				userInfo = pn;
-			}
-		}
-		
-		if(userInfo) {
-			PW_SBJsonWriter * json = [[PW_SBJsonWriter alloc] init];
-			NSString *jsonString =[json stringWithObject:userInfo];
-			[json release]; json = nil;
-
-			//the webview is not loaded yet, keep it for the callback
-			pushHandler.startPushData = jsonString;
-		}
-	}
-	
-	return result;
-}
-
-void dynamicMethodIMP(id self, SEL _cmd, id application, id param) {
-	if (_cmd == @selector(application:didRegisterForRemoteNotificationsWithDeviceToken:)) {
-		[self application:application internalDidRegisterForRemoteNotificationsWithDeviceToken:param];
-		return;
-    }
-	
-	if (_cmd == @selector(application:didFailToRegisterForRemoteNotificationsWithError:)) {
-		[self application:application internalDidFailToRegisterForRemoteNotificationsWithError:param];
-		return;
-    }
-	
-	if (_cmd == @selector(application:didReceiveRemoteNotification:)) {
-		[self application:application internalDidReceiveRemoteNotification:param];
-		return;
-    }
-}
-
-+ (void)load {
-	method_exchangeImplementations(class_getInstanceMethod(self, @selector(application:didFinishLaunchingWithOptions:)), class_getInstanceMethod(self, @selector(application:newDidFinishLaunchingWithOptions:)));
-	
-	//if methods does not exist - provide default implementation, otherwise swap the implementation
-	Method method = nil;
-	method = class_getInstanceMethod(self, @selector(application:didRegisterForRemoteNotificationsWithDeviceToken:));
-	if(method) {
-		method_exchangeImplementations(method, class_getInstanceMethod(self, @selector(application:newDidRegisterForRemoteNotificationsWithDeviceToken:)));
-	}
-	else {
-		class_addMethod(self, @selector(application:didRegisterForRemoteNotificationsWithDeviceToken:), (IMP)dynamicMethodIMP, "v@:::");
-	}
-	
-	method = class_getInstanceMethod(self, @selector(application:didFailToRegisterForRemoteNotificationsWithError:));
-	if(method) {
-		method_exchangeImplementations(class_getInstanceMethod(self, @selector(application:didFailToRegisterForRemoteNotificationsWithError:)), class_getInstanceMethod(self, @selector(application:newDidFailToRegisterForRemoteNotificationsWithError:)));
-	}
-	else {
-		class_addMethod(self, @selector(application:didFailToRegisterForRemoteNotificationsWithError:), (IMP)dynamicMethodIMP, "v@:::");
-	}
-	
-	method = class_getInstanceMethod(self, @selector(application:didReceiveRemoteNotification:));
-	if(method) {
-		method_exchangeImplementations(class_getInstanceMethod(self, @selector(application:didReceiveRemoteNotification:)), class_getInstanceMethod(self, @selector(application:newDidReceiveRemoteNotification:)));
-	}
-	else {
-		class_addMethod(self, @selector(application:didReceiveRemoteNotification:), (IMP)dynamicMethodIMP, "v@:::");
-	}
-}
-
-@end
-
-@implementation UIApplication(Pushwoosh)
-
-- (void) pw_setApplicationIconBadgeNumber:(NSInteger) badgeNumber {
-	[self pw_setApplicationIconBadgeNumber:badgeNumber];
-	
-	[[PushNotificationManager pushManager] sendBadges:badgeNumber];
-}
-
-+ (void) load {
-	method_exchangeImplementations(class_getInstanceMethod(self, @selector(setApplicationIconBadgeNumber:)), class_getInstanceMethod(self, @selector(pw_setApplicationIconBadgeNumber:)));
-	
-	UIApplication *app = [UIApplication sharedApplication];
-	NSLog(@"Initializing application: %@, %@", app, app.delegate);
 }
 
 @end

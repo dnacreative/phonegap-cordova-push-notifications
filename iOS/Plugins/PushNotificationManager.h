@@ -7,9 +7,11 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import "HtmlWebViewController.h"
+#import "PushRuntime.h"
 
 @class PushNotificationManager;
 @class CLLocation;
+@class PWLocationTracker;
 
 @protocol PushNotificationDelegate
 
@@ -46,6 +48,7 @@
 @property (nonatomic, retain) NSDictionary *pushNotifications;
 @property (nonatomic, assign) NSObject<PushNotificationDelegate> *delegate;
 @property (nonatomic, assign) PWSupportedOrientations supportedOrientations;
+@property (nonatomic, retain) PWLocationTracker *locationTracker;
 
 //show push notifications alert when push notification received and the app is running, default is TRUE
 @property (nonatomic, assign) BOOL showPushnotificationAlert;
@@ -60,10 +63,25 @@
 - (id) initWithApplicationCode:(NSString *)appCode navController:(UIViewController *) navController appName:(NSString *)appName __attribute__((deprecated));
 - (void) showWebView;
 
+//start location tracking. Specify mode in Info.plist, key - Pushwoosh_BGMODE
+//Modes are:
+//"PWTrackingDisabled" - no tracking in background (default)
+//"PWTrackSignificantLocationChanges" - this is battery efficient and uses network triangulation in background
+//"PWTrackAccurateLocationChanges" - uses GPS in background and drains the battery. You have to specify "location" background mode as per iOS requirements.
+- (void) startLocationTracking;
+- (void) startLocationTracking:(NSString *)mode;
+
+//stops location tracking
+- (void) stopLocationTracking;
+
 //send tags to server
 - (void) setTags: (NSDictionary *) tags;
 
+//records application open
 - (void) sendAppOpen;
+
+//sends current badge value to server
+- (void) sendBadges: (NSInteger) badge;
 
 //send geolocation to the server
 - (void) sendLocation: (CLLocation *) location;
@@ -78,6 +96,9 @@
 - (void) handlePushRegistration:(NSData *)devToken;
 - (void) handlePushRegistrationString:(NSString *)deviceID;
 - (NSString *) getPushToken;
+
+//internal
+- (void) handlePushRegistrationFailure:(NSError *) error;
 
 //if the push is received when the app is running
 - (BOOL) handlePushReceived:(NSDictionary *) userInfo;

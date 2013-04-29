@@ -43,6 +43,14 @@
 	PushNotification.prototype.sendLocation = function(config, success, fail) {
 		cordova.exec(success, fail, "PushNotification", "sendLocation", config ? [config] : []);
 	};
+ 
+	PushNotification.prototype.startLocationTracking = function(backgroundMode, success, fail) {
+		cordova.exec(success, fail, "PushNotification", "startLocationTracking", backgroundMode ? [{mode : backgroundMode}] : []);
+	};
+	 
+	PushNotification.prototype.stopLocationTracking = function(success, fail) {
+		cordova.exec(success, fail, "PushNotification", "stopLocationTracking", []);
+	};
 
 	PushNotification.prototype.onDeviceReady = function() {
 		cordova.exec(null, null, "PushNotification", "onDeviceReady", []);
@@ -54,8 +62,8 @@
 	};
 
 	// Call this to set the application icon badge
-	PushNotification.prototype.setApplicationIconBadgeNumber = function(badge, callback) {
-		cordova.exec(callback, callback, "PushNotification", "setApplicationIconBadgeNumber", [{badge: badge}]);
+	PushNotification.prototype.setApplicationIconBadgeNumber = function(badgeNumber, callback) {
+		cordova.exec(callback, callback, "PushNotification", "setApplicationIconBadgeNumber", [{badge: badgeNumber}]);
 	};
 
 	// Call this to clear all notifications from the notification center

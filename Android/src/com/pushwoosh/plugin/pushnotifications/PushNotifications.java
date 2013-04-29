@@ -11,6 +11,7 @@
 package com.pushwoosh.plugin.pushnotifications;
 
 import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.location.Location;
@@ -21,6 +22,7 @@ import com.arellomobile.android.push.BasePushMessageReceiver;
 import com.arellomobile.android.push.exception.PushWooshException;
 import com.arellomobile.android.push.preference.SoundType;
 import com.arellomobile.android.push.preference.VibrateType;
+import com.arellomobile.android.push.utils.RegisterBroadcastReceiver;
 import com.google.android.gcm.GCMRegistrar;
 import org.apache.cordova.api.Plugin;
 import org.apache.cordova.api.PluginResult;
@@ -46,10 +48,11 @@ public class PushNotifications extends Plugin
 	public static final String ON_DEVICE_READY = "onDeviceReady";
 	
 	boolean loggedStart = false;
+	boolean receiversRegistered = false;
 
 	HashMap<String, String> callbackIds = new HashMap<String, String>();
 	PushManager mPushManager = null;
-
+	
 	/**
 	 * Called when the activity receives a new intent.
 	 */
@@ -59,24 +62,38 @@ public class PushNotifications extends Plugin
 
 		checkMessage(intent);
 	}
-
-	@Override
-	public void onResume(boolean multitasking)
+	
+	BroadcastReceiver mBroadcastReceiver = new RegisterBroadcastReceiver()
 	{
-		super.onResume(multitasking);
+		@Override
+		public void onRegisterActionReceive(Context context, Intent intent)
+		{
+			checkMessage(intent);
+		}
+	};
+	
+	//Registration of the receivers
+	public void registerReceivers()
+	{
+		if(receiversRegistered)
+			return;
+		
+		IntentFilter intentFilter = new IntentFilter(cordova.getActivity().getPackageName() + ".action.PUSH_MESSAGE_RECEIVE");
 
-		IntentFilter intentFilter =
-				new IntentFilter(cordova.getActivity().getPackageName() + ".action.PUSH_MESSAGE_RECEIVE");
+		//comment this code out if you would like to receive the notifications in the notifications center when the app is in foreground
+		cordova.getActivity().registerReceiver(mReceiver, intentFilter);
 
-		//uncomment this code if you would like to receive the notifications in the app bypassing notification center if the app is in the foreground
-		//cordova.getActivity().registerReceiver(mReceiver, intentFilter);
+		//registration receiver
+		cordova.getActivity().registerReceiver(mBroadcastReceiver, new IntentFilter(cordova.getActivity().getPackageName() + "." + PushManager.REGISTER_BROAD_CAST_ACTION));
+		
+		receiversRegistered = true;
 	}
-
-	@Override
-	public void onPause(boolean multitasking)
+	
+	public void unregisterReceivers()
 	{
-		super.onPause(multitasking);
-
+		if(!receiversRegistered)
+			return;
+		
 		try
 		{
 			cordova.getActivity().unregisterReceiver(mReceiver);
@@ -85,6 +102,31 @@ public class PushNotifications extends Plugin
 		{
 			// pass. for some reason Phonegap call this method before onResume. Not Android lifecycle style...
 		}
+		
+		try
+		{
+			cordova.getActivity().unregisterReceiver(mBroadcastReceiver);
+		}
+		catch (Exception e)
+		{
+			//pass through
+		}
+		
+		receiversRegistered = false;
+	}
+
+	@Override
+	public void onResume(boolean multitasking)
+	{
+		super.onResume(multitasking);
+		registerReceivers();
+	}
+
+	@Override
+	public void onPause(boolean multitasking)
+	{
+		super.onPause(multitasking);
+		unregisterReceivers();
 	}
 
 	/**
@@ -108,13 +150,21 @@ public class PushNotifications extends Plugin
 			return new PluginResult(Status.ERROR, e.getMessage());
 		}
 
+		callbackIds.put("registerDevice", callbackId);
+
 		try
 		{
-			mPushManager =
-					new PushManager(cordova.getActivity(), params.getString("appid"), params.getString("projectid"));
+			String appid = null;
+			if(params.has("appid"))
+				appid = params.getString("appid");
+			else
+				appid = params.getString("pw_appid");
+			
+			mPushManager = new PushManager(cordova.getActivity(), appid, params.getString("projectid"));
 		}
 		catch (JSONException e)
 		{
+			callbackIds.remove(callbackId);
 			e.printStackTrace();
 			return new PluginResult(Status.ERROR, e.getMessage());
 		}
@@ -133,13 +183,12 @@ public class PushNotifications extends Plugin
 		}
 		catch (java.lang.RuntimeException e)
 		{
+			callbackIds.remove(callbackId);
 			e.printStackTrace();
 			return new PluginResult(Status.ERROR, e.getMessage());
 		}
 
 		checkMessage(cordova.getActivity().getIntent());
-
-		callbackIds.put("registerDevice", callbackId);
 
 		PluginResult result = new PluginResult(Status.NO_RESULT);
 		result.setKeepCallback(true);
@@ -240,11 +289,6 @@ public class PushNotifications extends Plugin
 
 	private PluginResult internalSendTags(JSONArray data, String callbackId)
 	{
-		if (mPushManager == null)
-		{
-			return new PluginResult(Status.ERROR);
-		}
-
 		JSONObject params;
 		try
 		{
@@ -295,6 +339,9 @@ public class PushNotifications extends Plugin
 	public PluginResult execute(String action, JSONArray data, String callbackId)
 	{
 		Log.d("PushNotifications", "Plugin Called");
+
+		//make sure the receivers are on
+		registerReceivers();
 		
 		if(ON_DEVICE_READY.equals(action))
 		{
@@ -390,41 +437,25 @@ public class PushNotifications extends Plugin
 		
 		if("setMultiNotificationMode".equals(action))
 		{
-			if (mPushManager == null)
-			{
-				return new PluginResult(Status.ERROR);
-			}
-
-			mPushManager.setMultiNotificationMode();
+			PushManager.setMultiNotificationMode(cordova.getActivity());
 			return new PluginResult(Status.OK);
 		}
 
 		if("setSingleNotificationMode".equals(action))
 		{
-			if (mPushManager == null)
-			{
-				return new PluginResult(Status.ERROR);
-			}
-
-			mPushManager.setSimpleNotificationMode();
+			PushManager.setSimpleNotificationMode(cordova.getActivity());
 			return new PluginResult(Status.OK);
 		}
 
 		if("setSoundType".equals(action))
 		{
-			if (mPushManager == null)
-			{
-				return new PluginResult(Status.ERROR);
-			}
-
-			JSONObject params = null;
 			try
 			{
 				Integer type = (Integer)data.get(0);
 				if(type == null)
 					return new PluginResult(Status.ERROR);
 				
-				mPushManager.setSoundNotificationType(SoundType.fromInt(type));
+				PushManager.setSoundNotificationType(cordova.getActivity(), SoundType.fromInt(type));
 			}
 			catch (Exception e)
 			{
@@ -437,19 +468,13 @@ public class PushNotifications extends Plugin
 
 		if("setVibrateType".equals(action))
 		{
-			if (mPushManager == null)
-			{
-				return new PluginResult(Status.ERROR);
-			}
-
-			JSONObject params = null;
 			try
 			{
 				Integer type = (Integer)data.get(0);
 				if(type == null)
 					return new PluginResult(Status.ERROR);
 				
-				mPushManager.setVibrateNotificationType(VibrateType.fromInt(type));
+				PushManager.setVibrateNotificationType(cordova.getActivity(), VibrateType.fromInt(type));
 			}
 			catch (Exception e)
 			{
@@ -462,16 +487,10 @@ public class PushNotifications extends Plugin
 
 		if("setLightScreenOnNotification".equals(action))
 		{
-			if (mPushManager == null)
-			{
-				return new PluginResult(Status.ERROR);
-			}
-
-			JSONObject params = null;
 			try
 			{
 				boolean type = (boolean)data.getBoolean(0);
-				mPushManager.setLightScreenOnNotification(type);
+				PushManager.setLightScreenOnNotification(cordova.getActivity(), type);
 			}
 			catch (Exception e)
 			{
@@ -484,16 +503,10 @@ public class PushNotifications extends Plugin
 		
 		if("setEnableLED".equals(action))
 		{
-			if (mPushManager == null)
-			{
-				return new PluginResult(Status.ERROR);
-			}
-
-			JSONObject params = null;
 			try
 			{
 				boolean type = (boolean)data.getBoolean(0);
-				mPushManager.setEnableLED(type);
+				PushManager.setEnableLED(cordova.getActivity(), type);
 			}
 			catch (Exception e)
 			{
@@ -507,11 +520,6 @@ public class PushNotifications extends Plugin
 
 		if("sendGoalAchieved".equals(action))
 		{
-			if (mPushManager == null)
-			{
-				return new PluginResult(Status.ERROR);
-			}
-			
 			JSONObject params = null;
 			try
 			{
@@ -534,7 +542,7 @@ public class PushNotifications extends Plugin
 				if(params.has("count"))
 					count = params.getInt("count");
 
-				mPushManager.sendGoalAchieved(cordova.getActivity(), goal, count);
+				PushManager.sendGoalAchieved(cordova.getActivity(), goal, count);
 			}
 			catch (Exception e)
 			{
@@ -593,7 +601,7 @@ public class PushNotifications extends Plugin
 		@Override
 		protected void onMessageReceive(Intent intent)
 		{
-			doOnMessageReceive(intent.getStringExtra(DATA_KEY));
+			doOnMessageReceive(intent.getStringExtra(JSON_DATA_KEY));
 		}
 	};
 }
