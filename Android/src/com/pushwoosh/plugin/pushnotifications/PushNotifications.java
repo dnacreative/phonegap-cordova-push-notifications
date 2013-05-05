@@ -24,9 +24,9 @@ import com.arellomobile.android.push.preference.SoundType;
 import com.arellomobile.android.push.preference.VibrateType;
 import com.arellomobile.android.push.utils.RegisterBroadcastReceiver;
 import com.google.android.gcm.GCMRegistrar;
-import org.apache.cordova.api.Plugin;
-import org.apache.cordova.api.PluginResult;
-import org.apache.cordova.api.PluginResult.Status;
+
+import org.apache.cordova.api.CallbackContext;
+import org.apache.cordova.api.CordovaPlugin;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -35,7 +35,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-public class PushNotifications extends Plugin
+public class PushNotifications extends CordovaPlugin
 {
 	public static final String REGISTER = "registerDevice";
 	public static final String UNREGISTER = "unregisterDevice";
@@ -50,7 +50,7 @@ public class PushNotifications extends Plugin
 	boolean loggedStart = false;
 	boolean receiversRegistered = false;
 
-	HashMap<String, String> callbackIds = new HashMap<String, String>();
+	HashMap<String, CallbackContext> callbackIds = new HashMap<String, CallbackContext>();
 	PushManager mPushManager = null;
 	
 	/**
@@ -137,7 +137,7 @@ public class PushNotifications extends Plugin
 		super.onDestroy();
 	}
 
-	private PluginResult internalRegister(JSONArray data, String callbackId)
+	private boolean internalRegister(JSONArray data, CallbackContext callbackContext)
 	{
 		JSONObject params = null;
 		try
@@ -147,10 +147,12 @@ public class PushNotifications extends Plugin
 		catch (JSONException e)
 		{
 			e.printStackTrace();
-			return new PluginResult(Status.ERROR, e.getMessage());
+			
+			callbackContext.error(e.getMessage());
+			return true;
 		}
 
-		callbackIds.put("registerDevice", callbackId);
+		callbackIds.put("registerDevice", callbackContext);
 
 		try
 		{
@@ -164,9 +166,11 @@ public class PushNotifications extends Plugin
 		}
 		catch (JSONException e)
 		{
-			callbackIds.remove(callbackId);
+			callbackIds.remove("registerDevice");
 			e.printStackTrace();
-			return new PluginResult(Status.ERROR, e.getMessage());
+			
+			callbackContext.error(e.getMessage());
+			return true;
 		}
 
 		try
@@ -183,16 +187,15 @@ public class PushNotifications extends Plugin
 		}
 		catch (java.lang.RuntimeException e)
 		{
-			callbackIds.remove(callbackId);
+			callbackIds.remove("registerDevice");
 			e.printStackTrace();
-			return new PluginResult(Status.ERROR, e.getMessage());
+			
+			callbackContext.error(e.getMessage());
+			return true;
 		}
 
 		checkMessage(cordova.getActivity().getIntent());
-
-		PluginResult result = new PluginResult(Status.NO_RESULT);
-		result.setKeepCallback(true);
-		return result;
+		return true;
 	}
 
 	private void checkMessage(Intent intent)
@@ -230,11 +233,9 @@ public class PushNotifications extends Plugin
 		}
 	}
 
-	private PluginResult internalUnregister(JSONArray data, String callbackId)
+	private boolean internalUnregister(JSONArray data, CallbackContext callbackContext)
 	{
-		callbackIds.put("unregisterDevice", callbackId);
-		PluginResult result = new PluginResult(Status.NO_RESULT);
-		result.setKeepCallback(true);
+		callbackIds.put("unregisterDevice", callbackContext);
 
 		try
 		{
@@ -242,16 +243,18 @@ public class PushNotifications extends Plugin
 		}
 		catch (Exception e)
 		{
-			return new PluginResult(Status.ERROR, e.getMessage());
+			callbackIds.remove("unregisterDevice");
+			callbackContext.error(e.getMessage());
+			return true;
 		}
 
-		return result;
+		return true;
 	}
 	
-	private PluginResult internalSendLocation(JSONArray data, String callbackId) {
+	private boolean internalSendLocation(JSONArray data, CallbackContext callbackContext) {
 		if (mPushManager == null)
 		{
-			return new PluginResult(Status.ERROR);
+			return false;
 		}
 		
 		JSONObject params = null;
@@ -262,7 +265,7 @@ public class PushNotifications extends Plugin
 		catch (JSONException e)
 		{
 			e.printStackTrace();
-			return new PluginResult(Status.ERROR);
+			return false;
 		}
 		
 		double lat = 0;
@@ -276,7 +279,7 @@ public class PushNotifications extends Plugin
 		catch (JSONException e)
 		{
 			e.printStackTrace();
-			return new PluginResult(Status.ERROR);
+			return false;
 		}
 		
 		Location location = new Location("");
@@ -284,10 +287,10 @@ public class PushNotifications extends Plugin
 		location.setLongitude(lon);
 		PushManager.sendLocation(cordova.getActivity(), location);
 
-		return new PluginResult(Status.OK);
+		return true;
 	}
 
-	private PluginResult internalSendTags(JSONArray data, String callbackId)
+	private boolean internalSendTags(JSONArray data, CallbackContext callbackContext)
 	{
 		JSONObject params;
 		try
@@ -297,7 +300,7 @@ public class PushNotifications extends Plugin
 		catch (JSONException e)
 		{
 			e.printStackTrace();
-			return new PluginResult(Status.ERROR);
+			return false;
 		}
 
 		@SuppressWarnings("unchecked") Iterator<String> nameItr = params.keys();
@@ -312,7 +315,7 @@ public class PushNotifications extends Plugin
 			catch (JSONException e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 		}
 
@@ -326,17 +329,18 @@ public class PushNotifications extends Plugin
 				skippedTags.put(tagName, skippedTags.get(tagName));
 			}
 
-			return new PluginResult(Status.OK, skippedTagsObj);
+			callbackContext.success(skippedTagsObj);
+			return true;
 		}
 		catch (PushWooshException e)
 		{
 			e.printStackTrace();
-			return new PluginResult(Status.ERROR);
+			return false;
 		}
 	}
 
 	@Override
-	public PluginResult execute(String action, JSONArray data, String callbackId)
+	public boolean execute(String action, JSONArray data, CallbackContext callbackId)
 	{
 		Log.d("PushNotifications", "Plugin Called");
 
@@ -346,7 +350,7 @@ public class PushNotifications extends Plugin
 		if(ON_DEVICE_READY.equals(action))
 		{
 			checkMessage(cordova.getActivity().getIntent());
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 		if (REGISTER.equals(action))
@@ -373,22 +377,22 @@ public class PushNotifications extends Plugin
 		{
 			if (mPushManager == null)
 			{
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
 			mPushManager.startTrackingGeoPushes();
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 		if (STOP_GEO_PUSHES.equals(action))
 		{
 			if (mPushManager == null)
 			{
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
 			mPushManager.stopTrackingGeoPushes();
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 		if (CREATE_LOCAL_NOTIFICATION.equals(action))
@@ -401,7 +405,7 @@ public class PushNotifications extends Plugin
 			catch (JSONException e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
 			try
@@ -410,7 +414,7 @@ public class PushNotifications extends Plugin
 				String message = params.getString("msg");
 				Integer seconds = params.getInt("seconds");
 				if(message == null || seconds == null)
-					return new PluginResult(Status.ERROR);
+					return false;
 
 				String userData = params.getString("userData");
 				
@@ -423,28 +427,28 @@ public class PushNotifications extends Plugin
 			catch (JSONException e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
-			return new PluginResult(Status.OK);
+			return true;
 		}
 		
 		if (CLEAR_LOCAL_NOTIFICATION.equals(action))
 		{
 			PushManager.clearLocalNotifications(cordova.getActivity());
-			return new PluginResult(Status.OK);
+			return true;
 		}
 		
 		if("setMultiNotificationMode".equals(action))
 		{
 			PushManager.setMultiNotificationMode(cordova.getActivity());
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 		if("setSingleNotificationMode".equals(action))
 		{
 			PushManager.setSimpleNotificationMode(cordova.getActivity());
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 		if("setSoundType".equals(action))
@@ -453,17 +457,17 @@ public class PushNotifications extends Plugin
 			{
 				Integer type = (Integer)data.get(0);
 				if(type == null)
-					return new PluginResult(Status.ERROR);
+					return false;
 				
 				PushManager.setSoundNotificationType(cordova.getActivity(), SoundType.fromInt(type));
 			}
 			catch (Exception e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 		if("setVibrateType".equals(action))
@@ -472,17 +476,17 @@ public class PushNotifications extends Plugin
 			{
 				Integer type = (Integer)data.get(0);
 				if(type == null)
-					return new PluginResult(Status.ERROR);
+					return false;
 				
 				PushManager.setVibrateNotificationType(cordova.getActivity(), VibrateType.fromInt(type));
 			}
 			catch (Exception e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 		if("setLightScreenOnNotification".equals(action))
@@ -495,10 +499,10 @@ public class PushNotifications extends Plugin
 			catch (Exception e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
-			return new PluginResult(Status.OK);
+			return true;
 		}
 		
 		if("setEnableLED".equals(action))
@@ -511,10 +515,10 @@ public class PushNotifications extends Plugin
 			catch (Exception e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 
@@ -528,7 +532,7 @@ public class PushNotifications extends Plugin
 			catch (JSONException e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
 			try
@@ -536,7 +540,7 @@ public class PushNotifications extends Plugin
 				//config params: {goal:"goalName", count:30}
 				String goal = params.getString("goal");
 				if(goal == null)
-					return new PluginResult(Status.ERROR);
+					return false;
 
 				Integer count = null;
 				if(params.has("count"))
@@ -547,53 +551,51 @@ public class PushNotifications extends Plugin
 			catch (Exception e)
 			{
 				e.printStackTrace();
-				return new PluginResult(Status.ERROR);
+				return false;
 			}
 
-			return new PluginResult(Status.OK);
+			return true;
 		}
 
 		Log.d("DirectoryListPlugin", "Invalid action : " + action + " passed");
-		return new PluginResult(Status.INVALID_ACTION);
+		return false;
 	}
 
 	private void doOnRegistered(String registrationId)
 	{
-		String callbackId = callbackIds.get("registerDevice");
-		PluginResult result = new PluginResult(Status.OK, registrationId);
-		success(result, callbackId);
-		callbackIds.remove(callbackId);
+		CallbackContext callback = callbackIds.get("registerDevice");
+		callback.success(registrationId);
+		callbackIds.remove("registerDevice");
 	}
 
 	private void doOnRegisteredError(String errorId)
 	{
-		String callbackId = callbackIds.get("registerDevice");
-		PluginResult result = new PluginResult(Status.ERROR, errorId);
-		error(result, callbackId);
-		callbackIds.remove(callbackId);
+		CallbackContext callback = callbackIds.get("registerDevice");
+		callback.error(errorId);
+		callbackIds.remove("registerDevice");
 	}
 
 	private void doOnUnregistered(String registrationId)
 	{
-		String callbackId = callbackIds.get("unregisterDevice");
-		PluginResult result = new PluginResult(Status.OK, registrationId);
-		success(result, callbackId);
-		callbackIds.remove(callbackId);
+		CallbackContext callback = callbackIds.get("unregisterDevice");
+		callback.success(registrationId);
+		callbackIds.remove("unregisterDevice");
 	}
 
 	private void doOnUnregisteredError(String errorId)
 	{
-		String callbackId = callbackIds.get("unregisterDevice");
-		PluginResult result = new PluginResult(Status.ERROR, errorId);
-		error(result, callbackId);
-		callbackIds.remove(callbackId);
+		CallbackContext callback = callbackIds.get("unregisterDevice");
+		callback.error(errorId);
+		callbackIds.remove("unregisterDevice");
 	}
 
 	private void doOnMessageReceive(String message)
 	{
 		Log.e("doOnMessageReceive", "message is: " + message);
 		String jsStatement = String.format("window.plugins.pushNotification.notificationCallback(%s);", message);
-		sendJavascript(jsStatement);
+		//webView.sendJavascript(jsStatement);
+		
+		webView.loadUrl("javascript:" + jsStatement);
 	}
 
 	private BroadcastReceiver mReceiver = new BasePushMessageReceiver()
