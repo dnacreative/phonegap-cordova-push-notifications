@@ -564,6 +564,9 @@ public class PushNotifications extends CordovaPlugin
 	private void doOnRegistered(String registrationId)
 	{
 		CallbackContext callback = callbackIds.get("registerDevice");
+		if(callback == null)
+			return;
+		
 		callback.success(registrationId);
 		callbackIds.remove("registerDevice");
 	}
@@ -571,6 +574,9 @@ public class PushNotifications extends CordovaPlugin
 	private void doOnRegisteredError(String errorId)
 	{
 		CallbackContext callback = callbackIds.get("registerDevice");
+		if(callback == null)
+			return;
+
 		callback.error(errorId);
 		callbackIds.remove("registerDevice");
 	}
@@ -578,6 +584,9 @@ public class PushNotifications extends CordovaPlugin
 	private void doOnUnregistered(String registrationId)
 	{
 		CallbackContext callback = callbackIds.get("unregisterDevice");
+		if(callback == null)
+			return;
+
 		callback.success(registrationId);
 		callbackIds.remove("unregisterDevice");
 	}
@@ -585,6 +594,9 @@ public class PushNotifications extends CordovaPlugin
 	private void doOnUnregisteredError(String errorId)
 	{
 		CallbackContext callback = callbackIds.get("unregisterDevice");
+		if(callback == null)
+			return;
+
 		callback.error(errorId);
 		callbackIds.remove("unregisterDevice");
 	}
