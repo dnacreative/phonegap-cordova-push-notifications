@@ -604,10 +604,17 @@ public class PushNotifications extends CordovaPlugin
 	private void doOnMessageReceive(String message)
 	{
 		Log.e("doOnMessageReceive", "message is: " + message);
-		String jsStatement = String.format("window.plugins.pushNotification.notificationCallback(%s);", message);
+		final String jsStatement = String.format("window.plugins.pushNotification.notificationCallback(%s);", message);
 		//webView.sendJavascript(jsStatement);
 		
-		webView.loadUrl("javascript:" + jsStatement);
+		cordova.getActivity().runOnUiThread(
+			new Runnable() { 
+				@Override
+		         public void run() {
+		        	 webView.loadUrl("javascript:" + jsStatement);
+		         }
+			}
+		);
 	}
 
 	private BroadcastReceiver mReceiver = new BasePushMessageReceiver()
