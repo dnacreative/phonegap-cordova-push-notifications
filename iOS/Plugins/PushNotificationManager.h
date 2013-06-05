@@ -13,6 +13,9 @@
 @class CLLocation;
 @class PWLocationTracker;
 
+typedef void(^pushwooshGetTagsHandler)(NSDictionary *tags);
+typedef void(^pushwooshErrorHandler)(NSError *error);
+
 @protocol PushNotificationDelegate
 
 @optional
@@ -30,6 +33,16 @@
 
 //user pressed OK on the push notification
 - (void) onPushAccepted:(PushNotificationManager *)pushManager withNotification:(NSDictionary *)pushNotification onStart:(BOOL)onStart;
+
+//received tags from the server
+- (void) onTagsReceived:(NSDictionary *)tags;
+
+//error receiving tags from the server
+- (void) onTagsFailedToReceive:(NSError *)error;
+@end
+
+@interface PWTags : NSObject
++ (NSDictionary *) incrementalTagWithInteger:(NSInteger)delta;
 @end
 
 @interface PushNotificationManager : NSObject <HtmlWebViewControllerDelegate> {
@@ -76,6 +89,12 @@
 
 //send tags to server
 - (void) setTags: (NSDictionary *) tags;
+
+//get tags from server, calls delegate method if exists
+- (void) loadTags;
+
+//get tags from server, calls delegate method if exists and handler (block)
+- (void) loadTags: (pushwooshGetTagsHandler) successHandler error:(pushwooshErrorHandler) errorHandler;
 
 //records application open
 - (void) sendAppOpen;

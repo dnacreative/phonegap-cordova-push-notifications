@@ -51,6 +51,14 @@ function onPushwooshInitialized(pushToken)
 	console.warn('push token: ' + pushToken);
 
 	var pushNotification = window.plugins.pushNotification;
+	
+	pushNotification.getTags(function(tags) {
+							console.warn('tags for the device: ' + JSON.stringify(tags));
+						 },
+						 function(error) {
+							console.warn('get tags error: ' + JSON.stringify(error));
+						 });
+	 
 
 	//set multi notificaiton mode
 	//pushNotification.setMultiNotificationMode();

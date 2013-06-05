@@ -103,6 +103,25 @@
 
 }
 
+- (void)getTags:(NSMutableArray *)arguments withDict:(NSMutableDictionary*)options {
+	// The first argument in the arguments parameter is the callbackID.
+	[self.callbackIds setValue:[arguments pop] forKey:@"getTags"];
+	
+	[[PushNotificationManager pushManager] loadTags:
+		^(NSDictionary *tags) {
+			 CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:tags];
+			 [self writeJavascript:[pluginResult toSuccessCallbackString:[self.callbackIds valueForKey:@"getTags"]]];
+		}
+		error:^(NSError *error) {
+			 NSMutableDictionary *results = [NSMutableDictionary dictionary];
+			 [results setValue:[NSString stringWithFormat:@"%@", error] forKey:@"error"];
+
+			 CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:results];
+			 [self writeJavascript:[pluginResult toErrorCallbackString:[self.callbackIds valueForKey:@"getTags"]]];
+		 }
+	 ];
+}
+
 - (void)sendLocation:(NSMutableArray *)arguments withDict:(NSMutableDictionary*)options {
 	// The first argument in the arguments parameter is the callbackID.
 	[self.callbackIds setValue:[arguments pop] forKey:@"sendLocation"];

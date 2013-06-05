@@ -10,6 +10,7 @@
 #import "PWRequestManager.h"
 #import "PWRegisterDeviceRequest.h"
 #import "PWSetTagsRequest.h"
+#import "PWGetTagsRequest.h"
 #import "PWSendBadgeRequest.h"
 #import "PWAppOpenRequest.h"
 #import "PWPushStatRequest.h"
@@ -28,6 +29,12 @@
 
 @interface UIApplication(Pushwoosh)
 - (void) pw_setApplicationIconBadgeNumber:(NSInteger) badgeNumber;
+@end
+
+@implementation PWTags
++ (NSDictionary *) incrementalTagWithInteger:(NSInteger)delta {
+	return [NSMutableDictionary dictionaryWithObjectsAndKeys:@"increment", @"operation", [NSNumber numberWithInt:delta], @"value", nil];
+}
 @end
 
 @implementation PushNotificationManager
@@ -665,6 +672,49 @@ static PushNotificationManager * instance = nil;
 
 - (void) setTags: (NSDictionary *) tags {
 	[self performSelectorInBackground:@selector(sendTagsBackground:) withObject:tags];
+}
+
+- (void) loadTags {
+	[self loadTags:nil error:nil];
+}
+
+- (void) loadTags: (pushwooshGetTagsHandler) successHandler error:(pushwooshErrorHandler) errorHandler{
+	dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0ul);
+	dispatch_async(queue, ^{
+		PWGetTagsRequest *request = [[PWGetTagsRequest alloc] init];
+		request.appId = appCode;
+		request.hwid = [self uniqueGlobalDeviceIdentifier];
+		
+		NSError *error = nil;
+		if ([[PWRequestManager sharedManager] sendRequest:request error:&error]) {
+			NSLog(@"loadTags completed");
+			
+			dispatch_async(dispatch_get_main_queue(), ^{
+				if([delegate respondsToSelector:@selector(onTagsReceived:)] ) {
+					[delegate onTagsReceived:request.tags];
+				}
+				
+				if(successHandler) {
+					successHandler(request.tags);
+				}
+			});
+			
+		} else {
+			NSLog(@"loadTags failed");
+			
+			dispatch_async(dispatch_get_main_queue(), ^{
+				if([delegate respondsToSelector:@selector(onTagsFailedToReceive:)] ) {
+					[delegate onTagsFailedToReceive:error];
+				}
+				
+				if(errorHandler) {
+					errorHandler(error);
+				}
+			});
+		}
+		
+		[request release]; request = nil;
+	});
 }
 
 - (void) recordGoal: (NSString *) goal {
