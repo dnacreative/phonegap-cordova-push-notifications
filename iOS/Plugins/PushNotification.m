@@ -37,7 +37,7 @@
 	return pushManager;
 }
 
-- (void)onDeviceReady:(NSMutableArray *)arguments withDict:(NSMutableDictionary*)options {
+- (void)onDeviceReady:(CDVInvokedUrlCommand*)command {
 	AppDelegate *delegate = [[UIApplication sharedApplication] delegate];
 	PushNotification *pushHandler = [delegate.viewController getCommandInstance:@"PushNotification"];
 	if(pushHandler.startPushData) {
@@ -47,10 +47,11 @@
 	}
 }
 
-- (void)registerDevice:(NSMutableArray *)arguments withDict:(NSMutableDictionary *)options {
+- (void)registerDevice:(CDVInvokedUrlCommand*)command {
 
+	NSDictionary *options = [command.arguments objectAtIndex:0];
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"registerDevice"];
+	[self.callbackIds setValue:command.callbackId forKey:@"registerDevice"];
 
 	UIRemoteNotificationType notificationTypes = UIRemoteNotificationTypeNone;
 	if ([options objectForKey:@"badge"]) {
@@ -92,20 +93,20 @@
 
 }
 
-- (void)setTags:(NSMutableArray *)arguments withDict:(NSMutableDictionary*)options {
+- (void)setTags:(CDVInvokedUrlCommand*)command {
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"setTags"];
+	[self.callbackIds setValue:command.callbackId forKey:@"setTags"];
 	
-	[[PushNotificationManager pushManager] setTags:options];
+	[[PushNotificationManager pushManager] setTags:[command.arguments objectAtIndex:0]];
 	
 	CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:nil];
 	[self writeJavascript:[pluginResult toSuccessCallbackString:[self.callbackIds valueForKey:@"setTags"]]];
 
 }
 
-- (void)getTags:(NSMutableArray *)arguments withDict:(NSMutableDictionary*)options {
+- (void)getTags:(CDVInvokedUrlCommand*)command {
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"getTags"];
+	[self.callbackIds setValue:command.callbackId forKey:@"getTags"];
 	
 	[[PushNotificationManager pushManager] loadTags:
 		^(NSDictionary *tags) {
@@ -122,12 +123,12 @@
 	 ];
 }
 
-- (void)sendLocation:(NSMutableArray *)arguments withDict:(NSMutableDictionary*)options {
+- (void)sendLocation:(CDVInvokedUrlCommand*)command {
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"sendLocation"];
+	[self.callbackIds setValue:command.callbackId forKey:@"sendLocation"];
 	
-	NSNumber * lat = [options objectForKey:@"lat"];
-	NSNumber * lon = [options objectForKey:@"lon"];
+	NSNumber * lat = [[command.arguments objectAtIndex:0] objectForKey:@"lat"];
+	NSNumber * lon = [[command.arguments objectAtIndex:0] objectForKey:@"lon"];
 	CLLocation * location = [[CLLocation alloc] initWithLatitude:[lat doubleValue] longitude:[lon doubleValue]];
 	[[PushNotificationManager pushManager] sendLocation:location];
 	[location release];
@@ -137,11 +138,11 @@
 	
 }
 
-- (void)startLocationTracking:(NSMutableArray *)arguments withDict:(NSMutableDictionary*)options {
+- (void)startLocationTracking:(CDVInvokedUrlCommand*)command {
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"startLocationTracking"];
+	[self.callbackIds setValue:command.callbackId forKey:@"startLocationTracking"];
 	
-	NSString *modeString = [options objectForKey:@"mode"];
+	NSString *modeString = [[command.arguments objectAtIndex:0] objectForKey:@"mode"];
 	if (modeString) {
 		[[PushNotificationManager pushManager] startLocationTracking:modeString];
 	} else {
@@ -153,9 +154,9 @@
 	
 }
 
-- (void)stopLocationTracking:(NSMutableArray *)arguments withDict:(NSMutableDictionary*)options {
+- (void)stopLocationTracking:(CDVInvokedUrlCommand*)command {
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"stopLocationTracking"];
+	[self.callbackIds setValue:command.callbackId forKey:@"stopLocationTracking"];
 	
 	[[PushNotificationManager pushManager] stopLocationTracking];
 	
@@ -270,10 +271,10 @@
 
 }
 
-- (void)getRemoteNotificationStatus:(NSMutableArray *)arguments withDict:(NSMutableDictionary *)options {
+- (void)getRemoteNotificationStatus:(CDVInvokedUrlCommand*)command {
 
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"getRemoteNotificationStatus"];
+	[self.callbackIds setValue:command.callbackId forKey:@"getRemoteNotificationStatus"];
 
 	NSMutableDictionary *results = [PushNotification getRemoteNotificationStatus];
 
@@ -281,12 +282,12 @@
 	[self writeJavascript:[pluginResult toSuccessCallbackString:[self.callbackIds valueForKey:@"getRemoteNotificationStatus"]]];
 }
 
-- (void)setApplicationIconBadgeNumber:(NSMutableArray *)arguments withDict:(NSMutableDictionary *)options {
+- (void)setApplicationIconBadgeNumber:(CDVInvokedUrlCommand*)command {
 
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"setApplicationIconBadgeNumber"];
+	[self.callbackIds setValue:command.callbackId forKey:@"setApplicationIconBadgeNumber"];
 
-    int badge = [[options objectForKey:@"badge"] intValue] ?: 0;
+    int badge = [[[command.arguments objectAtIndex:0] objectForKey:@"badge"] intValue] ?: 0;
     [[UIApplication sharedApplication] setApplicationIconBadgeNumber:badge];
 
     NSMutableDictionary *results = [NSMutableDictionary dictionary];
@@ -297,10 +298,10 @@
 	[self writeJavascript:[pluginResult toSuccessCallbackString:[self.callbackIds valueForKey:@"setApplicationIconBadgeNumber"]]];
 }
 
-- (void)cancelAllLocalNotifications:(NSMutableArray *)arguments withDict:(NSMutableDictionary *)options {
+- (void)cancelAllLocalNotifications:(CDVInvokedUrlCommand*)command {
 
 	// The first argument in the arguments parameter is the callbackID.
-	[self.callbackIds setValue:[arguments pop] forKey:@"cancelAllLocalNotifications"];
+	[self.callbackIds setValue:command.callbackId forKey:@"cancelAllLocalNotifications"];
 	
 	[[UIApplication sharedApplication] cancelAllLocalNotifications];
 	

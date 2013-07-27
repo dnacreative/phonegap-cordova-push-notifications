@@ -119,16 +119,6 @@
 
 #define SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(v)  ([[[UIDevice currentDevice] systemVersion] compare:v options:NSNumericSearch] != NSOrderedAscending)
 
-- (NSString *) uniqueDeviceIdentifier{
-    NSString *macaddress = [self macaddress];
-    NSString *bundleIdentifier = [[NSBundle mainBundle] bundleIdentifier];
-    
-    NSString *stringToHash = [NSString stringWithFormat:@"%@%@",macaddress,bundleIdentifier];
-    NSString *uniqueDeviceIdentifier = [self stringFromMD5:stringToHash];
-    
-    return uniqueDeviceIdentifier;
-}
-
 - (NSString *) uniqueGlobalDeviceIdentifier{
 	// >= iOS6 return identifierForVendor
 	UIDevice *device = [UIDevice currentDevice];
@@ -309,6 +299,16 @@ static PushNotificationManager * instance = nil;
 	[vc release];
 }
 
+- (void) showCustomPushPage:(NSString *)page {
+	HtmlWebViewController *vc = [[HtmlWebViewController alloc] initWithURLString:page];
+	vc.delegate = self;
+	vc.supportedOrientations = supportedOrientations;
+	
+	self.richPushWindow.rootViewController = vc;
+	[vc view];
+	[vc release];
+}
+
 - (void)htmlWebViewControllerDidClose:(HtmlWebViewController *)viewController {
 	
 	self.richPushWindow.transform = CGAffineTransformIdentity;
@@ -451,6 +451,11 @@ static PushNotificationManager * instance = nil;
 	if(htmlPageId) {
 		[self showPushPage:htmlPageId];
 	}
+
+	NSString *customHtmlPageId = [lastPushDict objectForKey:@"r"];
+	if(customHtmlPageId) {
+		[self showCustomPushPage:customHtmlPageId];
+	}
     
 	NSString *linkUrl = [lastPushDict objectForKey:@"l"];	
 	if(linkUrl) {
@@ -507,6 +512,7 @@ static PushNotificationManager * instance = nil;
 	NSString *htmlPageId = [userInfo objectForKey:@"h"];
 //	NSString *customData = [userInfo objectForKey:@"u"];
 	NSString *linkUrl = [userInfo objectForKey:@"l"];
+	NSString *customHtmlPageId = [userInfo objectForKey:@"r"];
 	
 	//the app is running, display alert only
 	if(!isPushOnStart && showPushnotificationAlert && msgIsString) {
@@ -520,6 +526,10 @@ static PushNotificationManager * instance = nil;
 	
 	if(htmlPageId) {
 		[self showPushPage:htmlPageId];
+	}
+
+	if(customHtmlPageId) {
+		[self showCustomPushPage:customHtmlPageId];
 	}
     
 	if(linkUrl) {
