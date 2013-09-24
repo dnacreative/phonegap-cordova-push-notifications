@@ -16,6 +16,7 @@
 #import "PWPushStatRequest.h"
 #import "PWGetNearestZoneRequest.h"
 #import "PWApplicationEventRequest.h"
+#import "PWUnregisterDeviceRequest.h"
 
 #import "PWLocationTracker.h"
 
@@ -372,6 +373,27 @@ static PushNotificationManager * instance = nil;
 	
 	[request release]; request = nil;
 	[pool release]; pool = nil;
+}
+
+- (void) unregisterDevice {
+	@autoreleasepool {
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+			
+			PWUnregisterDeviceRequest *request = [PWUnregisterDeviceRequest new];
+			request.appId = appCode;
+			request.hwid = [self uniqueGlobalDeviceIdentifier];
+			
+			NSError *error = nil;
+			if ([[PWRequestManager sharedManager] sendRequest:request error:&error]) {
+				NSLog(@"Unregistered for push notifications");
+			} else {
+				NSLog(@"Unregistering for push notifications failed");
+			}
+			
+			[request release];
+			
+		});
+	}
 }
 
 - (void) handlePushRegistrationString:(NSString *)deviceID {
