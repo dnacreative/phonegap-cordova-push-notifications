@@ -8,6 +8,8 @@
 
 @implementation PWGetTagsRequest
 
+@synthesize tags;
+
 - (NSString *) methodName {
 	return @"getTags";
 }

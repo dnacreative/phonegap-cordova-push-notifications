@@ -36,6 +36,9 @@
 	}
 
 	[dict setObject:mutableTags forKey:@"tags"];
+	
+	[mutableTags release];
+	
 	return dict;
 }
 - (void) dealloc {
