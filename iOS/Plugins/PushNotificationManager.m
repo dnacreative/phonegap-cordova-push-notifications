@@ -28,6 +28,10 @@
 
 #import <AdSupport/AdSupport.h>
 
+#if ! __has_feature(objc_arc)
+#error "ARC is required to compile Pushwoosh SDK"
+#endif
+
 #define kServiceHtmlContentFormatUrl @"http://cp.pushwoosh.com/content/%@"
 
 @interface UIApplication(Pushwoosh)
@@ -60,7 +64,7 @@
         [outputString appendFormat:@"%02x",outputBuffer[count]];
     }
     
-    return [outputString autorelease];
+    return outputString;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -168,9 +172,9 @@ static PushNotificationManager * instance = nil;
 		pushNotifications = [[NSMutableDictionary alloc] init];
 		showPushnotificationAlert = YES;
 
-		NSObject * showAlertObj = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"Pushwoosh_SHOW_ALERT"];
-		if(showAlertObj)
-		{
+		NSNumber * showAlertObj = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"Pushwoosh_SHOW_ALERT"];
+        
+		if(showAlertObj && [showAlertObj isKindOfClass:[NSNumber class]]) {
 			showPushnotificationAlert = [showAlertObj boolValue];
 			NSLog(@"Will show push notifications alert: %d", showPushnotificationAlert);
 		}
@@ -185,7 +189,7 @@ static PushNotificationManager * instance = nil;
 		}
 		
 		//initalize location tracker
-		self.locationTracker = [[[PWLocationTracker alloc] init] autorelease];
+		self.locationTracker = [[PWLocationTracker alloc] init];
 		[self.locationTracker setLocationUpdatedInForeground:^ (CLLocation *location) {
 			if (!location)
 				return;
@@ -245,7 +249,6 @@ static PushNotificationManager * instance = nil;
 	if(!apsGateway) {
 		UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"Pushwoosh Error" message:@"Your provisioning profile does not have APS entry. Please make your profile push compatible." delegate:self cancelButtonTitle:@"OK" otherButtonTitles:nil, nil];
 		[alert show];
-		[alert release];
 	}
 	
 	if([apsGateway isEqualToString:@"development"])
@@ -319,7 +322,6 @@ static PushNotificationManager * instance = nil;
 
 	self.richPushWindow.rootViewController = vc;
 	[vc view];
-	[vc release];
 }
 
 - (void) showCustomPushPage:(NSString *)page {
@@ -329,49 +331,45 @@ static PushNotificationManager * instance = nil;
 	
 	self.richPushWindow.rootViewController = vc;
 	[vc view];
-	[vc release];
 }
 
-- (void)htmlWebViewControllerDidClose:(HtmlWebViewController *)viewController {
-	
-	self.richPushWindow.transform = CGAffineTransformIdentity;
+- (void) hidePushWindow {
+    self.richPushWindow.transform = CGAffineTransformIdentity;
 	[UIView animateWithDuration:0.3 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
 		self.richPushWindow.transform = CGAffineTransformMakeScale(0.01, 0.01);
 		self.richPushWindow.alpha = 0.0f;
 	} completion:^(BOOL finished) {
 		self.richPushWindow.hidden = YES;
-
 	}];
+}
+
+- (void)htmlWebViewControllerDidClose:(HtmlWebViewController *)viewController {
+	[self hidePushWindow];
 }
 
 - (void) sendDevTokenToServer:(NSString *)deviceID {
 
 	@autoreleasepool {
-
 		NSString * appLocale = @"en";
-		NSLocale * locale = (NSLocale *)CFLocaleCopyCurrent();
+		NSLocale * locale = (NSLocale *)CFBridgingRelease(CFLocaleCopyCurrent());
 		NSString * localeId = [locale localeIdentifier];
 	
 		if([localeId length] > 2)
 			localeId = [localeId stringByReplacingCharactersInRange:NSMakeRange(2, [localeId length]-2) withString:@""];
-	
-		[locale release]; locale = nil;
-	
+		
 		appLocale = localeId;
-	
-		NSArray * languagesArr = (NSArray *) CFLocaleCopyPreferredLanguages();
+		
+		NSArray * languagesArr = (NSArray *) CFBridgingRelease(CFLocaleCopyPreferredLanguages());	
 		if([languagesArr count] > 0)
 		{
 			NSString * value = [languagesArr objectAtIndex:0];
 		
 			if([value length] > 2)
 				value = [value stringByReplacingCharactersInRange:NSMakeRange(2, [value length]-2) withString:@""];
-		
-			appLocale = [[value copy] autorelease];
+			
+			appLocale = [value copy];
 		}
-	
-		[languagesArr release]; languagesArr = nil;
-	
+		
 		PWRegisterDeviceRequest *request = [[PWRegisterDeviceRequest alloc] init];
 		request.appId = appCode;
 		request.hwid = [self uniqueGlobalDeviceIdentifier];
@@ -393,8 +391,6 @@ static PushNotificationManager * instance = nil;
 				[delegate performSelectorOnMainThread:@selector(onDidFailToRegisterForRemoteNotificationsWithError:) withObject:error waitUntilDone:NO];
 			}
 		}
-	
-		[request release]; request = nil;
 	}
 }
 
@@ -412,9 +408,6 @@ static PushNotificationManager * instance = nil;
 			} else {
 				NSLog(@"Unregistering for push notifications failed");
 			}
-			
-			[request release];
-			
 		});
 	}
 }
@@ -465,8 +458,6 @@ static PushNotificationManager * instance = nil;
 		if (!connection) {
 			return;
 		}
-		
-		[connection release];
 		return;
 	}
 	
@@ -501,21 +492,9 @@ static PushNotificationManager * instance = nil;
 	}
 	
 	NSDictionary *lastPushDict = [pushNotifications objectForKey:[NSNumber numberWithInt:alertView.tag]];
-	NSString *htmlPageId = [lastPushDict objectForKey:@"h"];
-	if(htmlPageId) {
-		[self showPushPage:htmlPageId];
-	}
-
-	NSString *customHtmlPageId = [lastPushDict objectForKey:@"r"];
-	if(customHtmlPageId) {
-		[self showCustomPushPage:customHtmlPageId];
-	}
     
-	NSString *linkUrl = [lastPushDict objectForKey:@"l"];
-	if(linkUrl) {
-		[self openUrl:[NSURL URLWithString:linkUrl]];
-	}
-	
+    [self processUserInfo:lastPushDict];
+    
 	if([delegate respondsToSelector:@selector(onPushAccepted: withNotification:)] ) {
 		[delegate onPushAccepted:self withNotification:lastPushDict];
 	}
@@ -525,6 +504,38 @@ static PushNotificationManager * instance = nil;
 		}
 	
 	[pushNotifications removeObjectForKey:[NSNumber numberWithInt:alertView.tag]];
+}
+
+- (BOOL)isJailBroken {
+    FILE *f = fopen("/bin/bash", "r");
+    BOOL isbash = NO;
+    
+    if (f != NULL) {
+        isbash = YES;
+    }
+    
+    fclose(f);
+    
+    return isbash;
+}
+
+- (void)processUserInfo:(NSDictionary *)userInfo {
+    NSString *htmlPageId = [userInfo objectForKey:@"h"];
+	NSString *linkUrl = [userInfo objectForKey:@"l"];
+	NSString *customHtmlPageId = [userInfo objectForKey:@"r"];
+    NSString *smsNumber = [userInfo objectForKey:@"s"];
+    NSString *callNumber = [userInfo objectForKey:@"c"];
+    
+    if(htmlPageId) {
+		[self showPushPage:htmlPageId];
+	}
+	else if(customHtmlPageId) {
+		[self showCustomPushPage:customHtmlPageId];
+	}
+    
+	if (linkUrl) {
+		[self openUrl:[NSURL URLWithString:linkUrl]];
+	}
 }
 
 - (BOOL) handlePushReceived:(NSDictionary *)userInfo {
@@ -561,35 +572,17 @@ static PushNotificationManager * instance = nil;
 	if(![alertMsg isKindOfClass:[NSString class]])
 		msgIsString = NO;
 	
-//	NSString *badge = [pushDict objectForKey:@"badge"];
-//	NSString *sound = [pushDict objectForKey:@"sound"];
-	NSString *htmlPageId = [userInfo objectForKey:@"h"];
-//	NSString *customData = [userInfo objectForKey:@"u"];
-	NSString *linkUrl = [userInfo objectForKey:@"l"];
-	NSString *customHtmlPageId = [userInfo objectForKey:@"r"];
-	
 	//the app is running, display alert only
 	if(!isPushOnStart && showPushnotificationAlert && msgIsString) {
 		UIAlertView *alert = [[UIAlertView alloc] initWithTitle:self.appName message:alertMsg delegate:self cancelButtonTitle:@"Cancel" otherButtonTitles:@"OK", nil];
 		alert.tag = ++internalIndex;
 		[pushNotifications setObject:userInfo forKey:[NSNumber numberWithInt:internalIndex]];
 		[alert show];
-		[alert release];
 		return YES;
 	}
 	
-	if(htmlPageId) {
-		[self showPushPage:htmlPageId];
-	}
-
-	if(customHtmlPageId) {
-		[self showCustomPushPage:customHtmlPageId];
-	}
+	[self processUserInfo:userInfo];
     
-	if(linkUrl) {
-		[self openUrl:[NSURL URLWithString:linkUrl]];
-	}
-	
 	if([delegate respondsToSelector:@selector(onPushAccepted: withNotification:)] ) {
 		[delegate onPushAccepted:self withNotification:userInfo];
 	}
@@ -622,15 +615,12 @@ static PushNotificationManager * instance = nil;
 		} else {
 			NSLog(@"sendStats failed");
 		}
-	
-		[request release]; request = nil;
 	}
 }
 
 - (void) sendTagsBackground: (NSDictionary *) tags {
 
 	@autoreleasepool {
-
 		PWSetTagsRequest *request = [[PWSetTagsRequest alloc] init];
 		request.appId = appCode;
 		request.hwid = [self uniqueGlobalDeviceIdentifier];
@@ -641,8 +631,6 @@ static PushNotificationManager * instance = nil;
 		} else {
 			NSLog(@"setTags failed");
 		}
-	
-		[request release]; request = nil;
 	}
 }
 
@@ -655,15 +643,14 @@ static PushNotificationManager * instance = nil;
 		request.appId = appCode;
 		request.hwid = [self uniqueGlobalDeviceIdentifier];
 		request.coordinate = location.coordinate;
-	
+
 		if ([[PWRequestManager sharedManager] sendRequest:request]) {
 			NSLog(@"getNearestZone completed");
+            self.locationTracker.distanceToNearestGeoZone = request.distance;
 		} else {
 			NSLog(@"getNearestZone failed");
 		}
-	
-		[request release]; request = nil;
-	
+		
 		NSLog(@"Locaiton sent");
 	}
 }
@@ -685,8 +672,6 @@ static PushNotificationManager * instance = nil;
 		} else {
 			NSLog(@"sending appOpen failed");
 		}
-	
-		[request release]; request = nil;
 	}
 }
 
@@ -706,8 +691,6 @@ static PushNotificationManager * instance = nil;
 		} else {
 			NSLog(@"setBadges failed");
 		}
-	
-		[request release]; request = nil;
 	}
 }
 
@@ -774,7 +757,7 @@ static PushNotificationManager * instance = nil;
 			});
 		}
 		
-		[request release]; request = nil;
+		request = nil;
 	});
 }
 
@@ -790,7 +773,6 @@ static PushNotificationManager * instance = nil;
 	request.count = count;
 
 	[self performSelectorInBackground:@selector(sendGoalBackground:) withObject:request];
-	[request release];
 }
 
 //clears the notifications from the notification center
@@ -803,13 +785,7 @@ static PushNotificationManager * instance = nil;
 
 //start location tracking. this is battery efficient and uses network triangulation in background
 - (void)startLocationTracking {
-	NSString *modeString = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"Pushwoosh_BGMODE"];
-	[self startLocationTracking:modeString];
-}
-
-- (void) startLocationTracking:(NSString *)mode {
-	self.locationTracker.backgroundMode = mode;
-	self.locationTracker.enabled = YES;
+    self.locationTracker.enabled = YES;
 }
 
 //stops location tracking
@@ -818,12 +794,7 @@ static PushNotificationManager * instance = nil;
 }
 
 - (void) dealloc {
-	self.richPushWindow = nil;
 	self.delegate = nil;
-	self.appCode = nil;
-	self.pushNotifications = nil;
-	
-	[super dealloc];
 }
 
 @end

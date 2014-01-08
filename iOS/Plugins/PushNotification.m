@@ -39,6 +39,8 @@
 }
 
 - (void)onDeviceReady:(CDVInvokedUrlCommand*)command {
+	deviceReady = YES;
+
 	AppDelegate *delegate = [[UIApplication sharedApplication] delegate];
 	PushNotification *pushHandler = [delegate.viewController getCommandInstance:@"PushNotification"];
 	if(pushHandler.startPushData) {
@@ -63,6 +65,9 @@
 	}
 	if ([options objectForKey:@"alert"]) {
 		notificationTypes |= UIRemoteNotificationTypeAlert;
+	}
+	if ([options objectForKey:@"newsstand"]) {
+		notificationTypes |= UIRemoteNotificationTypeNewsstandContentAvailability;
 	}
 
 	if (notificationTypes == UIRemoteNotificationTypeNone)
@@ -142,7 +147,6 @@
 	NSNumber * lon = [[command.arguments objectAtIndex:0] objectForKey:@"lon"];
 	CLLocation * location = [[CLLocation alloc] initWithLatitude:[lat doubleValue] longitude:[lon doubleValue]];
 	[[PushNotificationManager pushManager] sendLocation:location];
-	[location release];
 	
 	CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:nil];
 	[self writeJavascript:[pluginResult toSuccessCallbackString:[self.callbackIds valueForKey:@"sendLocation"]]];
@@ -153,12 +157,7 @@
 	// The first argument in the arguments parameter is the callbackID.
 	[self.callbackIds setValue:command.callbackId forKey:@"startLocationTracking"];
 	
-	NSString *modeString = [[command.arguments objectAtIndex:0] objectForKey:@"mode"];
-	if (modeString) {
-		[[PushNotificationManager pushManager] startLocationTracking:modeString];
-	} else {
-		[[PushNotificationManager pushManager] startLocationTracking];
-	}
+	[[PushNotificationManager pushManager] startLocationTracking];
 	
 	CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:nil];
 	[self writeJavascript:[pluginResult toSuccessCallbackString:[self.callbackIds valueForKey:@"startLocationTracking"]]];
@@ -206,7 +205,7 @@
 	if (u) {
 		PW_SBJsonParser * json = [[PW_SBJsonParser alloc] init];
 		NSDictionary *dict =[json objectWithString:u];
-		[json release]; json = nil;
+		json = nil;
 		
 		if (dict) {
 			[pn setObject:dict forKey:@"u"];
@@ -217,10 +216,22 @@
 	
 	PW_SBJsonWriter * json = [[PW_SBJsonWriter alloc] init];
 	NSString *jsonString =[json stringWithObject:pn];
-	[json release]; json = nil;
-	
-	NSString *jsStatement = [NSString stringWithFormat:@"window.plugins.pushNotification.notificationCallback(%@);", jsonString];
-	[self writeJavascript:[NSString stringWithFormat:@"setTimeout(function() { %@; }, 0);", jsStatement]];
+	json = nil;
+
+	if(!deviceReady)
+	{
+		//the webview is not loaded yet, keep it for the callback
+		AppDelegate *delegate = [[UIApplication sharedApplication] delegate];
+		PushNotification *pushHandler = [delegate.viewController getCommandInstance:@"PushNotification"];
+
+		pushHandler.startPushData = jsonString;
+	}
+	else
+	{
+		//send it to the webview
+		NSString *jsStatement = [NSString stringWithFormat:@"window.plugins.pushNotification.notificationCallback(%@);", jsonString];
+		[self writeJavascript:[NSString stringWithFormat:@"setTimeout(function() { %@; }, 0);", jsStatement]];
+	}
 }
 
 + (NSMutableDictionary*)getRemoteNotificationStatus {
@@ -323,9 +334,18 @@
 - (void) dealloc {
 	self.pushManager = nil;
 	self.startPushData = nil;
-
-	[_callbackIds dealloc];
-	[super dealloc];
 }
 
+@end
+
+@implementation UIApplication(InternalPushRuntime)
+- (BOOL) pushwooshDontAutoRegister {
+	return YES;
+}
+
+- (NSObject<PushNotificationDelegate> *)getPushwooshDelegate {
+	AppDelegate *delegate = [[UIApplication sharedApplication] delegate];
+	PushNotification *pushHandler = [delegate.viewController getCommandInstance:@"PushNotification"];
+	return pushHandler;
+}
 @end
