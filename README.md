@@ -1,7 +1,3 @@
-// Cordova Pushwoosh Push Notifications plugin
-// (c) Pushwoosh, 2014
-// http://www.pushwoosh.com
-
 This is a collection of Pushwoosh plugins/scripts for Phonegap/Cordova.
 
 This plugins require manual integration, i.e. you have to add the plugin source for the corresponding platform to your project manually and copy PushNotification.js from "www" folder to your "www" folder.
@@ -13,20 +9,20 @@ https://github.com/shaders/pushwoosh-phonegap-3.0-plugin
 https://github.com/shaders/phonegap-3-sample-app
 
 ##More details:
----------------------------------------------------
 
-###Android folder:
+Android folder:
+---------------------------------------------------
 Android push notifications plugin by Pushwoosh.
 
 ####Guide:
 http://www.pushwoosh.com/programming-push-notification/android/android-additional-platforms/phonegapcordova-sdk-integration/
----------------------------------------------------
+
 ###Blackberry folder:
 Pushwoosh javascript for BlackBerry HTML5 Webworks
 
 ####Guide:
 http://www.pushwoosh.com/programming-push-notification/blackberry/blackberry-additional-platforms/blackberry-html5-webworks-push-notification-sdk/
----------------------------------------------------
+
 ###iOS folder:
 iOS push notifications plugin by Pushwoosh.
 
