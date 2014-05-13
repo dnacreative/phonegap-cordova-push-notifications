@@ -5,5 +5,5 @@
 Pushwoosh integration Guide for Cordova/Phonegap:
 http://www.pushwoosh.com/programming-push-notification/android/android-additional-platforms/phonegapcordova-sdk-integration/
 
-For Cordova/Phonegap CLI check out this repo:
+Please use our official Cordova/Phonegap CLI in this repo:
 https://github.com/shaders/pushwoosh-phonegap-3.0-plugin
